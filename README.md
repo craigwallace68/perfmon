@@ -13,3 +13,6 @@ Steps to install:
 The main perfmon routine will collect and process data, and form the syslog message and send it to the designated server(s) per the crontab schedule.
 
 The get_cpu_peaks routine runs constantly to record transient peaks as well as averages for time inbetween the syslog messages, ensuring transients are captured and not missed (to about 1 second resolution).
+
+
+Project is in process...more updates coming.
