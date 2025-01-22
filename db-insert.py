@@ -1,12 +1,17 @@
 from datetime import datetime, timedelta
+import json
 import sys
+import re
 
 # Set search variables - file path (with a sorted timestamp field)
 file_path = '/var/log/syslog'
+parsed_logfile = '/home/nx2/perfmon_scripts/parsed_logfile.json'
 field_delimeter = ','
 field_index = 1
 search_ts = sys.argv[1]  # Temporary test, pass in last recorded timestamp in database
 prefix = 'timestamp'
+mid_row = 1
+start_row = 1
 
 # Binary search file for target timestamp
 def record_search(path, delim, field, ts_str):
@@ -63,36 +68,85 @@ def record_search(path, delim, field, ts_str):
 
     # Divide records, search, find and set file entry point to process db records from
     while low_record <= high_record:
-        mid_record = (low_record + high_record) // 2
+        mid_row = (low_record + high_record) // 2
         if (
-            rows_timestamps[mid_record]['timestamp'] > ts_dt_start
-            and rows_timestamps[mid_record]['timestamp'] > ts_dt_end
+            rows_timestamps[mid_row]['timestamp'] > ts_dt_start
+            and rows_timestamps[mid_row]['timestamp'] > ts_dt_end
         ):
-            high_record = mid_record - 1
+            high_record = mid_row - 1
         elif (
-            rows_timestamps[mid_record]['timestamp'] < ts_dt_start
-            and rows_timestamps[mid_record]['timestamp'] < ts_dt_end
+            rows_timestamps[mid_row]['timestamp'] < ts_dt_start
+            and rows_timestamps[mid_row]['timestamp'] < ts_dt_end
         ):
-            low_record = mid_record + 1
+            low_record = mid_row + 1
         elif (
-            rows_timestamps[mid_record]['timestamp'] >= ts_dt_start
-            and rows_timestamps[mid_record]['timestamp'] <= ts_dt_end
+            rows_timestamps[mid_row]['timestamp'] >= ts_dt_start
+            and rows_timestamps[mid_row]['timestamp'] <= ts_dt_end
         ):
             # Temporary for testing
-            print("list Index=", mid_record, "File Row=", rows_timestamps[mid_record]['line_number'], rows_timestamps[mid_record]['timestamp'], ts_dt, "Final")
-            return mid_record
+            # print("list Index=", mid_row, "File Row=", rows_timestamps[mid_row]['line_number'], rows_timestamps[mid_row]['timestamp'], ts_dt, "Final")
+
+            return rows_timestamps[mid_row]['line_number']
         else:
             # This should not happen if the timestamps are sorted correctly
             raise ValueError("Timestamps are not in order, at 1 minute interval, or not in range")
-    # Timestamp was not found
-    return None
+
+
+def parse_data(file_path, start_row):
+    # Temporary for testing
+    # print(f"Start Row is = : {start_row}")
+
+    # Open logfile again to filter and process output format
+    with open(file_path, 'r') as raw_file:
+        data = []
+
+        # Skip to start row position
+        for s in range(start_row):
+            next(raw_file)
+
+        #  Begin processing at start row
+        for i, line in enumerate(raw_file):
+            # Filter out everything up to 'host'
+            match = re.search(r'(?:^.*?)?(?=host=)', line)
+            if match:
+                filtered_line = re.sub(r'^(.*?)(?=host=)', '', line.strip())
+
+            # Check if host and timestamp are present
+            if re.search(r'(host|timestamp)=', line.lower()):
+
+                # Temporary for testing
+                # print(line)
+
+                key_value_pairs = {}
+
+                # Extract remaining key-value pairs
+                for match in re.finditer(r'([^,]+)=([^,]+)', filtered_line):
+                    key_value_pairs[match.group(1)] = match.group(2)
+
+                data.append(key_value_pairs)
+
+    # Write the JSON data to the output file
+    with open(parsed_logfile, 'w') as parsed_json:
+        json.dump(data, indent=4, fp=parsed_json)
+    return
+
+
+
+
+def insert_db_records():
+    pass
+
+
 
 
 # Main
 #db_insert
+def main():
+    start_row = record_search(file_path, field_delimeter, field_index, search_ts)
+    parse_data(file_path, start_row)
+    insert_db_records()
 
-record_search(file_path, field_delimeter, field_index, search_ts)
 
 
 if __name__ == "__main__":
-    record_search
+    main()
