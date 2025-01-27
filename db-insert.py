@@ -13,7 +13,13 @@ prefix = 'timestamp'
 mid_row = 1
 start_row = 1
 
-# Binary search file for target timestamp
+
+# Get the last record timestamp from the last insert process
+def get_last_db_timestamp():
+    pass
+
+
+# Binary search file for target timestamp (search_ts)
 def record_search(path, delim, field, ts_str):
 
     # Initialize timestamp datatype and list for indexing
@@ -132,7 +138,6 @@ def parse_data(file_path, start_row):
 
 
 
-
 def insert_db_records():
     pass
 
@@ -142,6 +147,7 @@ def insert_db_records():
 # Main
 #db_insert
 def main():
+    search_ts = get_last_db_timestamp
     start_row = record_search(file_path, field_delimeter, field_index, search_ts)
     parse_data(file_path, start_row)
     insert_db_records()
