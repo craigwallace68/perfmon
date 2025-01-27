@@ -1,137 +1,158 @@
-#!/bin/bash
+from datetime import datetime, timedelta
+import json
+import sys
+import re
 
-# Add a crontab setting to run this file every (recommended) minute (*/1 * * * * /usr/local/bin/perfmon.sh)
-# Suggest placing in /usr/local/bin path
+# Set search variables - file path (with a sorted timestamp field)
+file_path = '/var/log/syslog'
+parsed_logfile = '/home/nx2/perfmon_scripts/parsed_logfile.json'
+field_delimeter = ','
+field_index = 1
+search_ts = sys.argv[1]  # Temporary test, pass in last recorded timestamp in database
+prefix = 'timestamp'
+mid_row = 1
+start_row = 1
 
-# Set the remote hostnames of your syslog servers (comma separated)
-syslog_servers='172.20.68.83'
 
-# Set main or primary Ethernet interface
-eth_interface="enp1s0"
+# Get the last record timestamp from the last insert process
+def get_last_db_timestamp():
+    pass
 
-# Set path to cpu peaks gathering script
-get_cpu_peaks="/usr/local/bin/get_cpu_peaks.sh"
 
-# Set files location, but recommend /tmp folder as it is open to write and not persistent
-net_data_file="/tmp/net_metrics.txt"
-cpu_peaks_file="/tmp/cpu_peaks.txt"
+# Binary search file for target timestamp (search_ts)
+def record_search(path, delim, field, ts_str):
 
-# Determine if first run, or if first run after reboot (needs procps and/or ethtool)
-# If true, set intitial rx and tx values to calculate a delta value
-if [ ! -f "$net_data_file" ]; then
-  echo "tx_value: $(awk '{print $1}' /sys/class/net/$eth_interface/statistics/tx_bytes)
-  rx_value: $(awk '{print $1}' /sys/class/net/$eth_interface/statistics/rx_bytes)" > "$net_data_file"
-fi
+    # Initialize timestamp datatype and list for indexing
+    try:
+        ts_dt = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S')
+    except ValueError as e01:
+        print(f"e01: Invalid date format: {e01}")
+    rows_timestamps = []
 
-# Check if 'get_cpu_peaks.sh' script is running, if not, start it
-PID=$(pgrep -f get_cpu_peaks.sh | head -n 1)
-if [ -z "$PID" ]; then
-  # Main script not running, start it
-  eval "${get_cpu_peaks.sh}" &
-fi
+    #Open path/file
+    with open(path, 'r') as f:
+        line_number = 1
 
-# get the hostname of this machine
-get_hostname() {
-  declare -g current_hostname="${HOSTNAME}"
-}
+        # Iterate file, set row line numbers and timestamp paired together as dictionary objects_dt stored in list
+        while True:
+            line = next(f, None)
+            if not line:
+                break
 
-# Function to get cpu utilization (requires sysstat package, set /etc/default/sysstat ENABLED="true")
-get_cpu_utilization() {
-  output=$(sar -u ALL 1 1)
-  last_line=$(echo "$output" | tail -n 1)
-  idle_value=$(echo "$last_line" | awk '{print $NF}')
-  declare -g cpu_utilization=$(bc <<< "100 - $idle_value")
-}
+            # Check if line includes the delimeter
+            if prefix in line and delim in line:
+                current_line = line.split(delim)
+                try:
+                    time_str = current_line[field]
+                except IndexError as e02:
+                    print(f"e02: Line {line_number}: Field '{field}' not found. {e02}")
+                    continue
 
-# Function to get cpu temperature (requires lm-sensors package)
-get_cpu_temperature() {
-  temp=$(sensors | grep "Core" | head -1 | cut -d "+" -f2-)
-  cpu_temporary="${temp:0:7}"
-  declare -g cpu_temperature=$(echo "$cpu_temporary" | sed 's/ $//')
-}
+                # Check for relevent row with timestamp prefix to process, else skip row and continue
+                if time_str.startswith('timestamp='):
+                    time_str = time_str[10:]
+                    try:
+                        time_record = datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
+                    except ValueError as e03:
+                        print(f"e03: Invalid date format: {e03}")
+                        continue
+                    # Add relevent row to list of dictionary objects
+                    rows_timestamps.append({'line_number': line_number, 'timestamp': time_record})
+                    line_number += 1
+            else:
+                line_number += 1
 
-# Function to get hard disk space used and available (requires df package)
-get_disk_usage() {
-  declare -g disk_used=$(df -h | awk '/\/dev\/mapper\/pve-root/ {print $5 }')
-}
+    # Set records range (0 indexed)
+    low_record = 0
+    high_record = len(rows_timestamps) - 1
 
-# Function to get RAM memory usage (requires free package)
-get_ram_usage() {
-   ram_used=$(free -m | grep Mem: | awk '{print $3}')
-   ram_total=$(free -m | grep Mem: | awk '{print $2}')
-   declare -g percent_ram_used=$(( (ram_used * 100) / ram_total ))
-}
+    # Initialize and set range of seconds to include for match (cover 1 minute resolution)
+    ts_dt_start = ts_dt
+    ts_dt_end = ts_dt_start
+    ts_dt_start = ts_dt.replace(second=0)  # start of search minute
+    ts_dt_end = ts_dt_end.replace(second=59)  # end of search minute
 
-# Function to get tx network stats
-get_network_tx() {
-  prev_tx_bytes=$(awk '{if (NR==1) {print $2; exit}}' "$net_data_file")
-  new_tx_bytes=$(cat /sys/class/net/$eth_interface/statistics/tx_bytes | awk '{print $1}')
-  tx_delta=$((new_tx_bytes - prev_tx_bytes))
-  declare -g tx_bytes=$tx_delta
-}
+    # Divide records, search, find and set file entry point to process db records from
+    while low_record <= high_record:
+        mid_row = (low_record + high_record) // 2
+        if (
+            rows_timestamps[mid_row]['timestamp'] > ts_dt_start
+            and rows_timestamps[mid_row]['timestamp'] > ts_dt_end
+        ):
+            high_record = mid_row - 1
+        elif (
+            rows_timestamps[mid_row]['timestamp'] < ts_dt_start
+            and rows_timestamps[mid_row]['timestamp'] < ts_dt_end
+        ):
+            low_record = mid_row + 1
+        elif (
+            rows_timestamps[mid_row]['timestamp'] >= ts_dt_start
+            and rows_timestamps[mid_row]['timestamp'] <= ts_dt_end
+        ):
+            # Temporary for testing
+            # print("list Index=", mid_row, "File Row=", rows_timestamps[mid_row]['line_number'], rows_timestamps[mid_row]['timestamp'], ts_dt, "Final")
 
-# Function to get rx network stats
-get_network_rx() {
-  prev_rx_bytes=$(awk '{if (NR==2) {print $2; exit}}' "$net_data_file")
-  new_rx_bytes=$(cat /sys/class/net/$eth_interface/statistics/rx_bytes | awk '{print $1}')
-  rx_delta=$((new_rx_bytes - prev_rx_bytes))
-  declare -g rx_bytes=$rx_delta
-}
+            return rows_timestamps[mid_row]['line_number']
+        else:
+            # This should not happen if the timestamps are sorted correctly
+            raise ValueError("Timestamps are not in order, at 1 minute interval, or not in range")
 
-get_cpu_peaks() {
-# Check if the file exists
-  if [ -f "$cpu_peaks_file" ]; then
-    # Use awk to extract first and second columns into variables max util and max temp respectively
-   cmu=$(awk '{print $1}' "$cpu_peaks_file")
-   cmt=$(awk '{print $2}' "$cpu_peaks_file")
-   declare -g cpu_max_util=$cmu cpu_max_temp=$cmt
- fi
-}
 
-get_cpu_avg() {
-# Check if the file exists
-  if [ -f "$cpu_peaks_file" ]; then
-    # Use awk to extract third and fourth columns into variables avg util and avg temp respectively
-    cau=$(awk '{print $3}' "$cpu_peaks_file")
-     cat=$(awk '{print $4}' "$cpu_peaks_file")
-   declare -g cpu_avg_util=$cau cpu_avg_temp=$cat
- fi
-}
+def parse_data(file_path, start_row):
+    # Temporary for testing
+    # print(f"Start Row is = : {start_row}")
 
-get_cpu_measures_min() {
-  if [ -f "$cpu_peaks_file" ]; then
-    # Use awk to extract fith column into variables for measures per minute
-    cmp=$(awk '{print $5}' "$cpu_peaks_file")
-    declare -g cpu_meas_min=$cmp
- fi
-}
+    # Open logfile again to filter and process output format
+    with open(file_path, 'r') as raw_file:
+        data = []
 
-# Set stored byte values to current values for next delta calculation
-reset_network_bytes() {
-  echo "tx_value: $(awk '{print $1}' /sys/class/net/$eth_interface/statistics/tx_bytes)
-  rx_value: $(awk '{print $1}' /sys/class/net/$eth_interface/statistics/rx_bytes)" > "$net_data_file"
-}
+        # Skip to start row position
+        for s in range(start_row):
+            next(raw_file)
 
-# Get metrics and reset byte values
-get_hostname
-get_cpu_utilization
-get_cpu_temperature
-get_disk_usage
-get_ram_usage
-get_network_tx
-get_network_rx
-get_cpu_peaks
-get_cpu_avg
-get_cpu_measures_min
-reset_network_bytes
+        #  Begin processing at start row
+        for i, line in enumerate(raw_file):
+            # Filter out everything up to 'host'
+            match = re.search(r'(?:^.*?)?(?=host=)', line)
+            if match:
+                filtered_line = re.sub(r'^(.*?)(?=host=)', '', line.strip())
 
-# Get current time
-time_stamp=$(date +"%Y-%m-%d %H:%M:%S")
+            # Check if host and timestamp are present
+            if re.search(r'(host|timestamp)=', line.lower()):
 
-# Construct log message
-log_message="host=${current_hostname},timestamp=${time_stamp},cpu_inst_util=${cpu_utilization},cpu_avg_util=${cpu_avg_util},cpu_max_util=${cpu_max_util},cpu_inst_temp=${cpu_temperature},cpu_avg_temp=${cpu_avg_temp}°C,cpu_max_temp=${cpu_max_temp}°C,disk_usage=${disk_used},ram_usage=${percent_ram_used}%,tx_bytes=${tx_bytes},rx_bytes=${rx_bytes},cpu_meas_per_min=${cpu_meas_min}"
+                # Temporary for testing
+                # print(line)
 
-# Send logs to syslog servers
-for server in $syslog_servers; do
-  logger -s -n $server "$log_message"
-done
+                key_value_pairs = {}
+
+                # Extract remaining key-value pairs
+                for match in re.finditer(r'([^,]+)=([^,]+)', filtered_line):
+                    key_value_pairs[match.group(1)] = match.group(2)
+
+                data.append(key_value_pairs)
+
+    # Write the JSON data to the output file
+    with open(parsed_logfile, 'w') as parsed_json:
+        json.dump(data, indent=4, fp=parsed_json)
+    return
+
+
+
+def insert_db_records():
+    pass
+
+
+
+
+# Main
+#db_insert
+def main():
+    search_ts = get_last_db_timestamp
+    start_row = record_search(file_path, field_delimeter, field_index, search_ts)
+    parse_data(file_path, start_row)
+    insert_db_records()
+
+
+
+if __name__ == "__main__":
+    main()
