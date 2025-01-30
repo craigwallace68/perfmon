@@ -9,7 +9,7 @@ Steps to install:
  5.  Set up remote (or local) syslog receiver /etc/rsyslog.conf to allow udp/tcp port 514 (as shown in 'netservices syslog receiver' file.
  6.  Verify any firewall port 514 as needed on network, if required.
  7.  Set crontab file to execute perfmon.sh file cadence (recommended 1 min intervals).
- 8.  On syslog server, install db-insert.py file, ensure that listed import packages are all install, i.e. psycopg2 for postgresql operations.
+ 8.  On syslog server, install db-insert.py file, ensure that listed import packages are all installed, i.e. psycopg2 for postgresql operations.
 
 The main perfmon routine will collect and process data, and form the syslog message and send it to the designated server(s) per the crontab schedule.
 
