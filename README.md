@@ -19,4 +19,4 @@ The get_cpu_peaks routine runs constantly to record transient peaks as well as a
 Project is in process...more updates coming.
 
 
-NOTE:  This project is a homelab project and is experimental/learning only, not inteded to reinvent the wheel as that are better tools in the open source space for this function.
+NOTE:  This project is a homelab project and is experimental/learning only, not intended to reinvent the wheel as that are better tools in the open source space for this function.
