@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
+import psycopg2
+import configparser
 import json
-import sys
 import re
 
 # Set search variables - file path (with a sorted timestamp field)
@@ -8,25 +9,58 @@ file_path = '/var/log/syslog'
 parsed_logfile = '/home/nx2/perfmon_scripts/parsed_logfile.json'
 field_delimeter = ','
 field_index = 1
-search_ts = sys.argv[1]  # Temporary test, pass in last recorded timestamp in database
+# search_ts = sys.argv[1]  # Temporary test, pass in last recorded timestamp in database
 prefix = 'timestamp'
 mid_row = 1
 start_row = 1
+max_ts = None
 
 
 # Get the last record timestamp from the last insert process
-def get_last_db_timestamp():
-    pass
+def get_last_db_timestamp(max_ts_str):
+    # Read database config from file
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+
+    db_params = {
+        'dbname': config['database']['dbname'],
+        'user': config['database']['user'],
+        'password': config['database']['password'],
+        'host': config['database']['host'],
+        'port': config['database']['port']
+    }
+
+    # Connect to the database
+    try:
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
+
+        # Query to get the last timestamp from your table
+        query_max_timestamp = "SELECT MAX(time_stamp) FROM perfmon;"
+        cursor.execute(query_max_timestamp)
+        result = cursor.fetchone()
+        max_db_timestamp = result[0] if result[0] else None
+        max_ts_str = max_db_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        return max_ts_str
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        if connection:
+            cursor.close()
+            connection.close()
+
 
 
 # Binary search file for target timestamp (search_ts)
-def record_search(path, delim, field, ts_str):
+def record_search(path, delim, field, max_ts):
 
     # Initialize timestamp datatype and list for indexing
     try:
-        ts_dt = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S')
+        ts_dt = datetime.strptime(max_ts, '%Y-%m-%d %H:%M:%S')
     except ValueError as e01:
         print(f"e01: Invalid date format: {e01}")
+
     rows_timestamps = []
 
     #Open path/file
@@ -147,11 +181,13 @@ def insert_db_records():
 # Main
 #db_insert
 def main():
-    search_ts = get_last_db_timestamp
-    start_row = record_search(file_path, field_delimeter, field_index, search_ts)
+    max_ts = get_last_db_timestamp(None)
+    print(max_ts, type(max_ts))  #debug
+    start_row = record_search(file_path, field_delimeter, field_index, max_ts)
+    print(start_row)  # debug
     parse_data(file_path, start_row)
+    print(file_path, start_row) #debug
     insert_db_records()
-
 
 
 if __name__ == "__main__":
