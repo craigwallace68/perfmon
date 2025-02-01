@@ -1,6 +1,8 @@
 from datetime import datetime
 import psycopg2
+import functools
 import configparser
+import contextlib
 import json
 import re
 
@@ -8,14 +10,15 @@ import re
 file_path = '/var/log/syslog'
 parsed_logfile = '/home/nx2/perfmon_scripts/parsed_logfile.json'
 db_config_file = '/home/nx2/perfmon_scripts/config.ini'
+db_params = {}
+prefix = 'timestamp'
 field_delimeter = ','
 field_index = 1
 # search_ts = sys.argv[1]  # Temporary test, pass in last recorded timestamp in database
-prefix = 'timestamp'
 mid_row = 1
 start_row = 1
-db_params = {}
 max_ts = None
+
 
 
 
@@ -33,11 +36,20 @@ def get_db_params():
     }
     return db_params
 
+def with_db_params(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        db_params = get_db_params()  # call the original function to retrieve params
+        return func(db_params, *args, **kwargs)
+    return wrapper
+
 
 
 # Get the last record timestamp from the last insert process
-def get_last_db_timestamp(max_ts_str, **db_params):
+@with_db_params
+def get_last_db_timestamp(db_params, max_ts_str=None):
     # Connect to the database
+    connection = None
     try:
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
@@ -50,8 +62,8 @@ def get_last_db_timestamp(max_ts_str, **db_params):
         max_ts_str = max_db_timestamp.strftime("%Y-%m-%d %H:%M:%S")
         return max_ts_str
 
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    except Exception as e00:
+        print(f"An error occurred: {e00}")
     finally:
         if connection:
             cursor.close()
@@ -139,10 +151,11 @@ def record_search(path, delim, field, max_ts):
             raise ValueError("Timestamps are not in order, at 1 minute interval, or not in range")
 
 
-
-def parse_data(file_path, start_row):
+@with_db_params
+def parse_data(db_params, file_path, start_row):
     # Temporary for testing
     # print(f"Start Row is = : {start_row}")
+    db_params
 
     # Open logfile again to filter and process output format
     with open(file_path, 'r') as raw_file:
@@ -190,8 +203,7 @@ def insert_db_records():
 # Main
 #db_insert
 def main():
-    db_params = get_db_params()
-    max_ts = get_last_db_timestamp(None, **db_params)
+    max_ts = get_last_db_timestamp()
     print(max_ts, type(max_ts))  #debug
     start_row = record_search(file_path, field_delimeter, field_index, max_ts)
     print(start_row)  # debug
