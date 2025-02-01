@@ -1,26 +1,28 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 import psycopg2
 import configparser
 import json
 import re
 
-# Set search variables - file path (with a sorted timestamp field)
+# Set filepaths and initialize variables
 file_path = '/var/log/syslog'
 parsed_logfile = '/home/nx2/perfmon_scripts/parsed_logfile.json'
+db_config_file = '/home/nx2/perfmon_scripts/config.ini'
 field_delimeter = ','
 field_index = 1
 # search_ts = sys.argv[1]  # Temporary test, pass in last recorded timestamp in database
 prefix = 'timestamp'
 mid_row = 1
 start_row = 1
+db_params = {}
 max_ts = None
 
 
-# Get the last record timestamp from the last insert process
-def get_last_db_timestamp(max_ts_str):
+
+def get_db_params():
     # Read database config from file
     config = configparser.ConfigParser()
-    config.read('config.ini')
+    config.read(db_config_file)
 
     db_params = {
         'dbname': config['database']['dbname'],
@@ -29,7 +31,12 @@ def get_last_db_timestamp(max_ts_str):
         'host': config['database']['host'],
         'port': config['database']['port']
     }
+    return db_params
 
+
+
+# Get the last record timestamp from the last insert process
+def get_last_db_timestamp(max_ts_str, **db_params):
     # Connect to the database
     try:
         connection = psycopg2.connect(**db_params)
@@ -132,6 +139,7 @@ def record_search(path, delim, field, max_ts):
             raise ValueError("Timestamps are not in order, at 1 minute interval, or not in range")
 
 
+
 def parse_data(file_path, start_row):
     # Temporary for testing
     # print(f"Start Row is = : {start_row}")
@@ -178,10 +186,12 @@ def insert_db_records():
 
 
 
+
 # Main
 #db_insert
 def main():
-    max_ts = get_last_db_timestamp(None)
+    db_params = get_db_params()
+    max_ts = get_last_db_timestamp(None, **db_params)
     print(max_ts, type(max_ts))  #debug
     start_row = record_search(file_path, field_delimeter, field_index, max_ts)
     print(start_row)  # debug
