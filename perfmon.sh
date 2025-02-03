@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Add a crontab setting to run this file every (recommended) minute (*/1 * * * * /usr/local/bin/perfmon.sh)
+# Add a crontab setting to run this file every minute (*/1 * * * * /usr/local/bin/perfmon.sh)
 # Suggest placing in /usr/local/bin path
 
 # Set the remote hostnames of your syslog servers (comma separated)
@@ -9,10 +9,8 @@ syslog_servers='172.20.68.83'
 # Set main or primary Ethernet interface
 eth_interface="enp1s0"
 
-# Set path to cpu peaks gathering script
-get_cpu_peaks="/usr/local/bin/get_cpu_peaks.sh"
-
 # Set files location, but recommend /tmp folder as it is open to write and not persistent
+get_cpu_peaks="/usr/local/bin/get_cpu_peaks.sh"
 net_data_file="/tmp/net_metrics.txt"
 cpu_peaks_file="/tmp/cpu_peaks.txt"
 
@@ -27,7 +25,7 @@ fi
 PID=$(pgrep -f get_cpu_peaks.sh | head -n 1)
 if [ -z "$PID" ]; then
   # Main script not running, start it
-  eval "${get_cpu_peaks.sh}" &
+  eval "${get_cpu_peaks}" &
 fi
 
 # get the hostname of this machine
@@ -47,7 +45,7 @@ get_cpu_utilization() {
 get_cpu_temperature() {
   temp=$(sensors | grep "Core" | head -1 | cut -d "+" -f2-)
   cpu_temporary="${temp:0:7}"
-  declare -g cpu_temperature=$(echo "$cpu_temporary" | sed 's/ $//')
+  declare -g cpu_temperature=$(echo "$cpu_temporary" | tr -d '[:space:]' | sed 's/°C$//')
 }
 
 # Function to get hard disk space used and available (requires df package)
@@ -129,7 +127,7 @@ reset_network_bytes
 time_stamp=$(date +"%Y-%m-%d %H:%M:%S")
 
 # Construct log message
-log_message="host=${current_hostname},timestamp=${time_stamp},cpu_inst_util=${cpu_utilization},cpu_avg_util=${cpu_avg_util},cpu_max_util=${cpu_max_util},cpu_inst_temp=${cpu_temperature},cpu_avg_temp=${cpu_avg_temp}°C,cpu_max_temp=${cpu_max_temp}°C,disk_usage=${disk_used},ram_usage=${percent_ram_used}%,tx_bytes=${tx_bytes},rx_bytes=${rx_bytes},cpu_meas_per_min=${cpu_meas_min}"
+log_message="host=${current_hostname},timestamp=${time_stamp},cpu_inst_util=${cpu_utilization},cpu_avg_util=${cpu_avg_util},cpu_max_util=${cpu_max_util},cpu_inst_temp=${cpu_temperature}C,cpu_avg_temp=${cpu_avg_temp}C,cpu_max_temp=${cpu_max_temp}C,disk_usage=${disk_used},ram_usage=${percent_ram_used}%,tx_bytes=${tx_bytes},rx_bytes=${rx_bytes},cpu_meas_per_min=${cpu_meas_min}"
 
 # Send logs to syslog servers
 for server in $syslog_servers; do
