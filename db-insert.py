@@ -1,8 +1,9 @@
 from datetime import datetime
 import psycopg2
+from psycopg2 import sql, OperationalError, ProgrammingError, IntegrityError
+import logging
 import functools
 import configparser
-import contextlib
 import json
 import re
 
@@ -63,7 +64,7 @@ def get_last_db_timestamp(db_params, max_ts_str=None):
         return max_ts_str
 
     except Exception as e00:
-        print(f"An error occurred: {e00}")
+        print(f"e00: An error occurred: {e00}")
     finally:
         if connection:
             cursor.close()
@@ -152,49 +153,88 @@ def record_search(path, delim, field, max_ts):
 
 
 @with_db_params
-def parse_data(db_params, file_path, start_row):
+def insert_parsed_data(db_params, file_path, start_row):
     # Temporary for testing
     # print(f"Start Row is = : {start_row}")
-    db_params
+    connection = None
+    try:
+        connection = psycopg2.connect(**db_params)
+        cursor = connection.cursor()
 
-    # Open logfile again to filter and process output format
-    with open(file_path, 'r') as raw_file:
-        data = []
+        # Open logfile again to filter and process output format
+        with open(file_path, 'r') as raw_file:
+            data = []
 
-        # Skip to start row position
-        for s in range(start_row):
-            next(raw_file)
+            # Skip down through the logfile to start row position
+            for s in range(start_row):
+                next(raw_file)
 
-        #  Begin processing at start row
-        for i, line in enumerate(raw_file):
-            # Filter out everything up to 'host'
-            match = re.search(r'(?:^.*?)?(?=host=)', line)
-            if match:
-                filtered_line = re.sub(r'^(.*?)(?=host=)', '', line.strip())
+            #  Begin processing at start row
+            for i, line in enumerate(raw_file):
+                # Filter out everything up to 'host'
+                match = re.search(r'(?:^.*?)?(?=host=)', line)
+                if match:
+                    filtered_line = re.sub(r'^(.*?)(?=host=)', '', line.strip())
 
-            # Check if host and timestamp are present
-            if re.search(r'(host|timestamp)=', line.lower()):
+                # Check if host and timestamp are present
+                if re.search(r'(host|timestamp)=', line.lower()):
 
-                # Temporary for testing
-                # print(line)
+                    # Temporary for testing
+                    # print(line)
 
-                key_value_pairs = {}
+                    # Extract remaining key-value pairs
+                    matches = re.findall(r'([^,]+)=([^,]+)', filtered_line)
 
-                # Extract remaining key-value pairs
-                for match in re.finditer(r'([^,]+)=([^,]+)', filtered_line):
-                    key_value_pairs[match.group(1)] = match.group(2)
+                    # Create a dictionary with the 13 match pairs
+                    key_value_pairs = {}
+                    for key, value in matches:
+                        key_value_pairs[key] = value
 
-                data.append(key_value_pairs)
+                    # Insert data into the table using a parameterized query
+                    insert_query = """
+                    INSERT INTO perfmon (
+                    host, time_stamp, cpu_inst_util, cpu_avg_util, cpu_max_util, cpu_inst_temp,
+                    cpu_avg_temp, cpu_max_temp, disk_usage, ram_usage, tx_bytes, rx_bytes,
+                    cpu_meas_per_min
+                    ) VALUES (%s, TO_TIMESTAMP(%s, 'YYYY-MM-DD HH24:MI:SS'), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """
+                    cursor.execute(insert_query,
+                    (key_value_pairs['host'],
+                    key_value_pairs['timestamp'],
+                    key_value_pairs['cpu_inst_util'],
+                    key_value_pairs['cpu_avg_util'],
+                    key_value_pairs['cpu_max_util'],
+                    key_value_pairs['cpu_inst_temp'],
+                    key_value_pairs['cpu_avg_temp'],
+                    key_value_pairs['cpu_max_temp'],
+                    key_value_pairs['disk_usage'],
+                    key_value_pairs['ram_usage'],
+                    key_value_pairs['tx_bytes'],
+                    key_value_pairs['rx_bytes'],
+                    key_value_pairs['cpu_meas_per_min']
+                    ))
 
-    # Write the JSON data to the output file
-    with open(parsed_logfile, 'w') as parsed_json:
-        json.dump(data, indent=4, fp=parsed_json)
-    return
+                    # Commit changes
+                    connection.commit()
+                    data.append(key_value_pairs)
+                    print(i)
 
-
-
-def insert_db_records():
-    pass
+        # Write the JSON data to the output file
+        with open(parsed_logfile, 'w') as parsed_json:
+            json.dump(data, indent=4, fp=parsed_json)
+        return
+    except OperationalError as e04:
+        logging.error(f"Operational error occurred: {e04}")
+    except ProgrammingError as e04:
+        logging.error(f"Programming error (e.g., syntax) occurred: {e04}")
+    except IntegrityError as e04:
+        logging.error(f"Integrity error (e.g., constraint violation) occurred: {e04}")
+    except Exception as e04:
+        print(f"e04: An error occurred: {e04}")
+    finally:
+        if connection:
+            cursor.close()
+            connection.close()
 
 
 
@@ -207,9 +247,9 @@ def main():
     print(max_ts, type(max_ts))  #debug
     start_row = record_search(file_path, field_delimeter, field_index, max_ts)
     print(start_row)  # debug
-    parse_data(file_path, start_row)
+    insert_parsed_data(file_path, start_row)
     print(file_path, start_row) #debug
-    insert_db_records()
+
 
 
 if __name__ == "__main__":
