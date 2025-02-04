@@ -217,7 +217,7 @@ def insert_parsed_data(db_params, file_path, start_row):
                     # Commit changes
                     connection.commit()
                     data.append(key_value_pairs)
-                    print(i)
+                    #print(i)
 
         # Write the JSON data to the output file
         with open(parsed_logfile, 'w') as parsed_json:
@@ -244,11 +244,11 @@ def insert_parsed_data(db_params, file_path, start_row):
 #db_insert
 def main():
     max_ts = get_last_db_timestamp()
-    print(max_ts, type(max_ts))  #debug
+    #print(max_ts, type(max_ts))  #debug
     start_row = record_search(file_path, field_delimeter, field_index, max_ts)
-    print(start_row)  # debug
+    #print(start_row)  # debug
     insert_parsed_data(file_path, start_row)
-    print(file_path, start_row) #debug
+    #print(file_path, start_row) #debug
 
 
 
