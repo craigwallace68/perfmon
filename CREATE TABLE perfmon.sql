@@ -15,3 +15,6 @@ CREATE TABLE perfmon (
 	cpu_meas_per_min int4 NULL,
 	CONSTRAINT perfmon_pkey PRIMARY KEY (id)
 );
+
+CREATE INDEX idx_time_stamp ON perfmon (time_stamp);
+CREATE INDEX idx_host ON perfmon (host);
