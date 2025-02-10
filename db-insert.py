@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import psycopg2
 from psycopg2 import sql, OperationalError, ProgrammingError, IntegrityError
 import logging
@@ -145,7 +145,6 @@ def record_search(path, delim, field, max_ts):
         ):
             # Temporary for testing
             # print("list Index=", mid_row, "File Row=", rows_timestamps[mid_row]['line_number'], rows_timestamps[mid_row]['timestamp'], ts_dt, "Final")
-
             return rows_timestamps[mid_row]['line_number']
         else:
             # This should not happen if the timestamps are sorted correctly
@@ -244,11 +243,20 @@ def insert_parsed_data(db_params, file_path, start_row):
 #db_insert
 def main():
     max_ts = get_last_db_timestamp()
-    #print(max_ts, type(max_ts))  #debug
+
+    # Search existing syslog file for a record
     start_row = record_search(file_path, field_delimeter, field_index, max_ts)
-    #print(start_row)  # debug
+    # If start_row is returned as None, then old syslog file was archived, add 1 minute to the timestamp and re-run the search in the new syslog file
+    if (
+        start_row == None):
+        cv_ts = datetime.strptime(max_ts, "%Y-%m-%d %H:%M:%S")
+        adj_ts = cv_ts + timedelta(minutes=1)
+        max_ts = adj_ts.strftime("%Y-%m-%d %H:%M:%S")
+        start_row = record_search(file_path, field_delimeter, field_index, max_ts)
+
+    # Call db insert function
     insert_parsed_data(file_path, start_row)
-    #print(file_path, start_row) #debug
+
 
 
 
