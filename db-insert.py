@@ -198,19 +198,19 @@ def insert_parsed_data(db_params, file_path, start_row):
                     ) VALUES (%s, TO_TIMESTAMP(%s, 'YYYY-MM-DD HH24:MI:SS'), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                     """
                     cursor.execute(insert_query,
-                    (key_value_pairs['host'],
-                    key_value_pairs['timestamp'],
-                    key_value_pairs['cpu_inst_util'],
-                    key_value_pairs['cpu_avg_util'],
-                    key_value_pairs['cpu_max_util'],
-                    key_value_pairs['cpu_inst_temp'],
-                    key_value_pairs['cpu_avg_temp'],
-                    key_value_pairs['cpu_max_temp'],
-                    key_value_pairs['disk_usage'],
-                    key_value_pairs['ram_usage'],
-                    key_value_pairs['tx_bytes'],
-                    key_value_pairs['rx_bytes'],
-                    key_value_pairs['cpu_meas_per_min']
+                    (key_value_pairs.get('host', 'host'),
+                    key_value_pairs.get('timestamp', '1970-01-01 00:00:00'),
+                    key_value_pairs.get('cpu_inst_util', '0'),
+                    key_value_pairs.get('cpu_avg_util', '0'), 
+                    key_value_pairs.get('cpu_max_util', '0'),
+                    key_value_pairs.get('cpu_inst_temp', '0'), 
+                    key_value_pairs.get('cpu_avg_temp', '0'), 
+                    key_value_pairs.get('cpu_max_temp', '0'),
+                    key_value_pairs.get('disk_usage', '0'),  
+                    key_value_pairs.get('ram_usage', '0'), 
+                    key_value_pairs.get('tx_bytes', '0'), 
+                    key_value_pairs.get('rx_bytes', '0'),
+                    key_value_pairs.get('cpu_meas_per_min', '0')
                     ))
 
                     # Commit changes
