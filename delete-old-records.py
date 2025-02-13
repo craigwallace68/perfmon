@@ -1,55 +1,103 @@
 import psycopg2
 import configparser
 from datetime import datetime, timedelta
+import logging
 
-# Add a crontab setting to run this file every day (0 12 * * * python3 /home/nx2/perfmon_scripts/delete_old_records.py)
+def setup_logging():
+    logger = logging.getLogger()
 
-# Read database config from file
-config = configparser.ConfigParser()
-config.read('config.ini')
+    # Create a handler that writes log messages to a file
+    file_handler = logging.FileHandler('/var/log/nx2-perfmon.log')
 
+    # Include 'as current time' and log message into log format
+    formatter = logging.Formatter('%(asctime)s - nx2-perfmon: %(message)s')
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.setLevel(logging.INFO)
 
 def get_db_params():
-    db_params = {
-    'dbname': config['database']['dbname'],
-    'user': config['database']['user'],
-    'password': config['database']['password'],
-    'host': config['database']['host'],
-    'port': config['database']['port']
-}
+    logging.info("get_db_params start")
+
+    config = configparser.ConfigParser()
+    try:
+        config.read('config.ini')
+
+        db_params = {
+            'dbname': config['database']['dbname'],
+            'user': config['database']['user'],
+            'password': config['database']['password'],
+            'host': config['database']['host'],
+            'port': config['database']['port']
+        }
+    except Exception as e:
+        logging.error(f"get_db_params result: An error occurred: {e}")
+        raise
+    else:
+        logging.info("get_db_params result: Success")
+
     return db_params
 
-
 def delete_old_records(db_params):
-# Connect to the database
     connection = None
     cursor = None
+
     try:
+        # Open DB Connection
+        logging.info("open db connection start")
+
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
 
-        # Query to delete older records
-        delete_query = "DELETE FROM perfmon WHERE time_stamp < %s;"
+        logging.info("open db connection result: Success")
 
-        # Calculate the cutoff date (e.g., 30 days ago)
+        # Set old_date
+        logging.info("set old_date start")
+
         old_date = datetime.now() - timedelta(days=60)
 
+        logging.info(f"set old_date result: {old_date}")
+
         # Execute the query
-        cursor.execute(delete_query, (old_date))
+        logging.info("execute delete query start")
+
+        delete_query = "DELETE FROM perfmon WHERE time_stamp < %s;"
+        cursor.execute(delete_query, (old_date,))
+
         connection.commit()
 
+        logging.info("execute delete query result: Success")
+
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.error(f"An error occurred during record deletion: {e}")
+
     finally:
         if connection:
-            cursor.close()
-            connection.close()
+            try:
+                # Close Cursor
+                logging.info("close cursor start")
 
+                cursor.close()
+
+                logging.info("close cursor result: Success")
+
+                # Close Connection
+                logging.info("close db connection start")
+
+                connection.close()
+
+                logging.info("close db connection result: Success")
+
+            except Exception as e:
+                logging.error(f"An error occurred while closing resources: {e}")
 
 def main():
-    db_params = get_db_params()
-    delete_old_records(db_params)
-
+    try:
+        db_params = get_db_params()
+        delete_old_records(db_params)
+    except Exception as e:
+        logging.error(f"main execution failed: {e}")
 
 if __name__ == "__main__":
+    setup_logging()  # Initialize logging to a file
     main()
