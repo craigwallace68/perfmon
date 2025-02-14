@@ -1,7 +1,10 @@
 import psycopg2
 import configparser
+import os
 from datetime import datetime, timedelta
 import logging
+
+db_config_file = '/home/nx2/perfmon_scripts/config.ini'
 
 def setup_logging():
     logger = logging.getLogger()
@@ -16,9 +19,21 @@ def setup_logging():
     logger.addHandler(file_handler)
     logger.setLevel(logging.INFO)
 
+# Set os file_path from test function
+def file_exists(file_path):
+    return os.path.exists(file_path)
+
+# Test if file is present
+def db_config_exists(db_config_file):
+    if file_exists(db_config_file):
+        logging.info("config.ini file exists")
+    else:
+        logging.error("unable to locate config.ini file")
+
+# Get config.ini file parameters
 def get_db_params():
     logging.info("get_db_params start")
-
+    
     config = configparser.ConfigParser()
     try:
         config.read('config.ini')
@@ -30,6 +45,8 @@ def get_db_params():
             'host': config['database']['host'],
             'port': config['database']['port']
         }
+        filter_params = {key:value for key, value in db_params.items() if key != 'password'}
+        logging.info(', '.join(f"{key}: {value}" for key, value in filter_params.items()))
     except Exception as e:
         logging.error(f"get_db_params result: An error occurred: {e}")
         raise
@@ -92,6 +109,9 @@ def delete_old_records(db_params):
                 logging.error(f"An error occurred while closing resources: {e}")
 
 def main():
+    # Test for config.ini file
+    db_config_exists(db_config_file)
+    
     try:
         db_params = get_db_params()
         delete_old_records(db_params)
