@@ -71,7 +71,7 @@ def delete_old_records(db_params):
         # Set old_date
         logging.info("set old_date start")
 
-        old_date = datetime.now() - timedelta(days=60)
+        old_date = datetime.now() - timedelta(days=30)
 
         logging.info(f"set old_date result: {old_date}")
 
