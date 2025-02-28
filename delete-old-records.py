@@ -4,7 +4,19 @@ import os
 from datetime import datetime, timedelta
 import logging
 
+# Set paths
+path = '/home/nx2/perfmon_scripts'
 db_config_file = '/home/nx2/perfmon_scripts/config.ini'
+
+# Set retension number of days
+keepdays = 30
+
+# Suggested crontab entry to run this cleanup script
+# 10 2 * * * python3 /home/nx2/perfmon_scripts/delete-old-records.py
+
+
+
+os.chdir(path)
 
 def setup_logging():
     logger = logging.getLogger()
@@ -71,7 +83,7 @@ def delete_old_records(db_params):
         # Set old_date
         logging.info("set old_date start")
 
-        old_date = datetime.now() - timedelta(days=30)
+        old_date = datetime.now() - timedelta(days=keepdays)
 
         logging.info(f"set old_date result: {old_date}")
 
