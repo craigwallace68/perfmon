@@ -7,6 +7,9 @@ import configparser
 import json
 import re
 
+# Suggested crontab entry to run this script and sync with other processes
+# 00:50 * * * * python3 /home/nx2/perfmon_scripts/db-insert.py
+
 # Set filepaths and initialize variables
 file_path = '/var/log/syslog'
 parsed_logfile = '/home/nx2/perfmon_scripts/parsed_logfile.json'
