@@ -1,7 +1,10 @@
+#!/usr/bin/python3
+
 from datetime import datetime, timedelta
 import psycopg2
 from psycopg2 import sql, OperationalError, ProgrammingError, IntegrityError
 import logging
+import os
 import functools
 import configparser
 import json
@@ -12,6 +15,7 @@ import re
 
 # Set filepaths and initialize variables
 file_path = '/var/log/syslog'
+script_path = '/home/nx2/perfmon_scripts'
 parsed_logfile = '/home/nx2/perfmon_scripts/parsed_logfile.json'
 db_config_file = '/home/nx2/perfmon_scripts/config.ini'
 db_params = {}
@@ -24,6 +28,20 @@ start_row = 1
 max_ts = None
 
 
+os.chdir(script_path)
+
+def setup_logging():
+    logger = logging.getLogger()
+
+    # Create a handler that writes log messages to a file
+    file_handler = logging.FileHandler('/var/log/nx2-db-insert.log')
+
+    # Include 'as current time' and log message into log format
+    formatter = logging.Formatter('%(asctime)s - nx2-db-insert: %(message)s')
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.setLevel(logging.INFO)
 
 
 def get_db_params():
@@ -159,6 +177,7 @@ def insert_parsed_data(db_params, file_path, start_row):
     # Temporary for testing
     # print(f"Start Row is = : {start_row}")
     connection = None
+    record_count = 0
     try:
         connection = psycopg2.connect(**db_params)
         cursor = connection.cursor()
@@ -215,6 +234,7 @@ def insert_parsed_data(db_params, file_path, start_row):
                     key_value_pairs.get('rx_bytes', '0'),
                     key_value_pairs.get('cpu_meas_per_min', '0')
                     ))
+                    record_count += 1
 
                     # Commit changes
                     connection.commit()
@@ -234,6 +254,7 @@ def insert_parsed_data(db_params, file_path, start_row):
     except Exception as e04:
         print(f"e04: An error occurred: {e04}")
     finally:
+        logging.info(f"Inserted {record_count} Records")
         if connection:
             cursor.close()
             connection.close()
@@ -241,21 +262,27 @@ def insert_parsed_data(db_params, file_path, start_row):
 
 
 
-
 # Main
 #db_insert
 def main():
+    # Initialize logging
+    setup_logging()
+
+    # Find last timestamp entry from database
     max_ts = get_last_db_timestamp()
 
     # Search existing syslog file for a record
     start_row = record_search(file_path, field_delimeter, field_index, max_ts)
+    logging.info(f"Start Row is: {start_row}")
     # If start_row is returned as None, then old syslog file was archived, add 1 minute to the timestamp and re-run the search in the new syslog file
     if (
         start_row == None):
         cv_ts = datetime.strptime(max_ts, "%Y-%m-%d %H:%M:%S")
         adj_ts = cv_ts + timedelta(minutes=1)
         max_ts = adj_ts.strftime("%Y-%m-%d %H:%M:%S")
+        logging.info(f"New search timestamp is: {max_ts} -adding 1 minute to record search")
         start_row = record_search(file_path, field_delimeter, field_index, max_ts)
+        logging.info(f"Adjusted new search Start Row is found now?: {start_row}")
 
     # Call db insert function
     insert_parsed_data(file_path, start_row)
