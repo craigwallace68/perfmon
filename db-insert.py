@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from datetime import datetime, timedelta
+import time
 import psycopg2
 from psycopg2 import sql, OperationalError, ProgrammingError, IntegrityError
 import logging
@@ -15,6 +16,7 @@ import re
 
 # Set filepaths and initialize variables
 file_path = '/var/log/syslog'
+archive_file_path = '/var/log/syslog.1'
 script_path = '/home/nx2/perfmon_scripts'
 parsed_logfile = '/home/nx2/perfmon_scripts/parsed_logfile.json'
 db_config_file = '/home/nx2/perfmon_scripts/config.ini'
@@ -260,6 +262,26 @@ def insert_parsed_data(db_params, file_path, start_row):
             connection.close()
 
 
+def get_new_ts(new_syslog_file):
+    ts_regex = re.compile(r'timestamp=(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})')
+    with open(new_syslog_file, 'r') as file:
+        for line in file:
+            if 'proxmox' in line:
+                while True:
+                    next_line = next(file, None)
+                    if not next_line:
+                        break
+                    match = ts_regex.search(next_line)
+                    if match:
+                        new_ts = match.group(1)
+                        try:
+                            ts_obj = datetime.strptime(new_ts, '%Y-%m-%d %H:%M:%S')
+                            return ts_obj
+                        except ValueError as e5:
+                            print(f'Invalid timestamp format: {e5}')
+                    break        
+
+
 
 
 # Main
@@ -274,15 +296,15 @@ def main():
     # Search existing syslog file for a record
     start_row = record_search(file_path, field_delimeter, field_index, max_ts)
     logging.info(f"Start Row is: {start_row}")
-    # If start_row is returned as None, then old syslog file was archived, add 1 minute to the timestamp and re-run the search in the new syslog file
+    # If start_row is returned as None, then old syslog file was archived - reset with current syslog file last ts
     if (
-        start_row == None):
-        cv_ts = datetime.strptime(max_ts, "%Y-%m-%d %H:%M:%S")
-        adj_ts = cv_ts + timedelta(minutes=1)
-        max_ts = adj_ts.strftime("%Y-%m-%d %H:%M:%S")
-        logging.info(f"New search timestamp is: {max_ts} -adding 1 minute to record search")
-        start_row = record_search(file_path, field_delimeter, field_index, max_ts)
-        logging.info(f"Adjusted new search Start Row is found now?: {start_row}")
+        start_row == None and int(time.time()) - int(os.stat('/var/log/syslog.1').st_mtime) < 100):
+            logging.info('syslog was archived')
+            new_ts = get_new_ts(file_path)
+            logging.info(f'New timestamp is: {new_ts}')
+            start_row = record_search(file_path, field_delimeter, field_index, new_ts)
+            logging.info(f"Adjusted new search Start Row is found now?: {start_row}")
+            insert_parsed_data(file_path, start_row)
 
     # Call db insert function
     insert_parsed_data(file_path, start_row)
