@@ -1,3 +1,5 @@
+# Script that rotates old SQL records ('keepdays' variable) in order to keep only a rollind x number of days
+
 import psycopg2
 import configparser
 import os
