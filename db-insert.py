@@ -225,14 +225,14 @@ def insert_parsed_data(db_params, file_path, start_row):
                     (key_value_pairs.get('host', 'host'),
                     key_value_pairs.get('timestamp', '1970-01-01 00:00:00'),
                     key_value_pairs.get('cpu_inst_util', '0'),
-                    key_value_pairs.get('cpu_avg_util', '0'), 
+                    key_value_pairs.get('cpu_avg_util', '0'),
                     key_value_pairs.get('cpu_max_util', '0'),
-                    key_value_pairs.get('cpu_inst_temp', '0'), 
-                    key_value_pairs.get('cpu_avg_temp', '0'), 
+                    key_value_pairs.get('cpu_inst_temp', '0'),
+                    key_value_pairs.get('cpu_avg_temp', '0'),
                     key_value_pairs.get('cpu_max_temp', '0'),
-                    key_value_pairs.get('disk_usage', '0'),  
-                    key_value_pairs.get('ram_usage', '0'), 
-                    key_value_pairs.get('tx_bytes', '0'), 
+                    key_value_pairs.get('disk_usage', '0'),
+                    key_value_pairs.get('ram_usage', '0'),
+                    key_value_pairs.get('tx_bytes', '0'),
                     key_value_pairs.get('rx_bytes', '0'),
                     key_value_pairs.get('cpu_meas_per_min', '0')
                     ))
@@ -276,11 +276,28 @@ def get_new_ts(new_syslog_file):
                         new_ts = match.group(1)
                         try:
                             ts_obj = datetime.strptime(new_ts, '%Y-%m-%d %H:%M:%S')
+                            logging.info(f'Found new log record with timestamp {ts_obj}')
                             return ts_obj
                         except ValueError as e5:
                             print(f'Invalid timestamp format: {e5}')
-                    break        
+                    break
 
+
+def rerun_insert(file_path):
+    # log new file path, is the same as the original but new as the old file was archived
+    new_file_path = file_path
+    logging.info(f'searching new file path {new_file_path} for newest timestamp')
+
+    # log the new file timestamp date of last modification
+    new_file_ts = int(os.stat('/var/log/syslog').st_mtime)
+    logging.info(f'new logfile {new_file_path} created at {new_file_ts}')
+
+    # execute the new start row search and then rerun the insert function to establish the new syslog file
+    new_ts = get_new_ts(file_path)
+    logging.info(f'New timestamp is: {new_ts}')
+    start_row = record_search(file_path, field_delimeter, field_index, new_ts)
+    logging.info(f"Adjusted new search Start Row is found now?: {start_row}")
+    insert_parsed_data(file_path, start_row)
 
 
 
@@ -296,19 +313,15 @@ def main():
     # Search existing syslog file for a record
     start_row = record_search(file_path, field_delimeter, field_index, max_ts)
     logging.info(f"Start Row is: {start_row}")
+
     # If start_row is returned as None, then old syslog file was archived - reset with current syslog file last ts
     if (
         start_row == None and int(time.time()) - int(os.stat('/var/log/syslog.1').st_mtime) < 100):
-            logging.info('syslog was archived')
-            new_ts = get_new_ts(file_path)
-            logging.info(f'New timestamp is: {new_ts}')
-            start_row = record_search(file_path, field_delimeter, field_index, new_ts)
-            logging.info(f"Adjusted new search Start Row is found now?: {start_row}")
-            insert_parsed_data(file_path, start_row)
+            logging.info('syslog was archived, running search/insert against new syslog file')
+            rerun_insert(file_path)
 
     # Call db insert function
     insert_parsed_data(file_path, start_row)
-
 
 
 
