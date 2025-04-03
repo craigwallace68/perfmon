@@ -87,7 +87,7 @@ def get_last_db_timestamp(db_params, max_ts_str=None):
         
         # If no current sql record exists, run the rerun function to try and establish one based on current syslog
         if max_db_timestamp is None:
-            rerun_insert()
+            rerun_insert(file_path)
         max_ts_str = max_db_timestamp.strftime("%Y-%m-%d %H:%M:%S")
         
     except Exception as e00:
