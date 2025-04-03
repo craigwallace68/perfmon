@@ -84,12 +84,12 @@ def get_last_db_timestamp(db_params, max_ts_str=None):
         cursor.execute(query_max_timestamp)
         result = cursor.fetchone()
         max_db_timestamp = result[0] if result[0] else None
-        
+
         # If no current sql record exists, run the rerun function to try and establish one based on current syslog
         if max_db_timestamp is None:
             rerun_insert(file_path)
         max_ts_str = max_db_timestamp.strftime("%Y-%m-%d %H:%M:%S")
-        
+
     except Exception as e00:
         print(f"e00: An error occurred: {e00}")
     finally:
@@ -218,11 +218,6 @@ def insert_parsed_data(db_params, file_path, start_row):
                     for key, value in matches:
                         key_value_pairs[key] = value
 
-                    # Convert tx and rx bytes into strings to bypass standard int range limit
-                    # Let SQL auto convert to bigint upon insert function
-                    tx_bytes = str(key_value_pairs.get('tx_bytes', '0'))
-                    rx_bytes = str(key_value_pairs.get('rx_bytes', '0'))
-
                     # Insert data into the table using a parameterized query
                     insert_query = """
                     INSERT INTO perfmon (
@@ -242,8 +237,8 @@ def insert_parsed_data(db_params, file_path, start_row):
                     key_value_pairs.get('cpu_max_temp', '0'),
                     key_value_pairs.get('disk_usage', '0'),
                     key_value_pairs.get('ram_usage', '0'),
-                    tx_bytes,
-                    rx_bytes,
+                    key_value_pairs.get('tx_bytes', '0'),
+                    key_value_pairs.get('rx_bytes', '0'),
                     key_value_pairs.get('cpu_meas_per_min', '0')
                     ))
                     record_count += 1
