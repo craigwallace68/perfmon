@@ -304,6 +304,8 @@ def rerun_insert(file_path):
     start_row = record_search(file_path, field_delimeter, field_index, new_ts)
     logging.info(f"Adjusted new search Start Row is found now?: {start_row}")
     insert_parsed_data(file_path, start_row)
+    # Stop program execution so that 'insert_parsed_data' ins't run twice
+    quit()
 
 
 
