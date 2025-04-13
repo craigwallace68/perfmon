@@ -87,6 +87,7 @@ def get_last_db_timestamp(db_params, max_ts_str=None):
 
         # If no current sql record exists, run the rerun function to try and establish one based on current syslog
         if max_db_timestamp is None:
+            logging.info(f'db timestamp is: {max_db_timestamp}, rerun_insert function')
             rerun_insert(file_path)
         max_ts_str = max_db_timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -299,7 +300,7 @@ def rerun_insert(file_path):
 
     # execute the new start row search and then rerun the insert function to establish the new syslog file
     new_ts = get_new_ts(file_path)
-    logging.info(f'New timestamp is: {new_ts}')
+    logging.info(f'New syslog file first log entry timestamp is: {new_ts}')
     start_row = record_search(file_path, field_delimeter, field_index, new_ts)
     logging.info(f"Adjusted new search Start Row is found now?: {start_row}")
     insert_parsed_data(file_path, start_row)
@@ -321,8 +322,8 @@ def main():
 
     # If start_row is returned as None, then old syslog file was archived - reset with current syslog file last ts
     if (
-        start_row == None and int(time.time()) - int(os.stat('/var/log/syslog.1').st_mtime) < 100):
-            logging.info('syslog was archived, running search/insert against new syslog file')
+        start_row == None and abs(int(time.time()) - int(os.stat('/var/log/syslog.1').st_mtime)) < 200):
+            logging.info(f'Test for start_row is {start_row}, syslog ~ archived, running search/insert against new syslog file')
             rerun_insert(file_path)
 
     # Call db insert function
